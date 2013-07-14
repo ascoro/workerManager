@@ -28,13 +28,23 @@ module.exports = function(grunt) {
         src: ['src/html/<%= pkg.name %>.html'],
         dest: 'dist/<%= pkg.name %>.html'
       }
+    },
+	uglify: {
+      options: {
+        banner: '<%= banner %>'
+      },
+      dist: {
+        src: '<%= concat.js.dest %>',
+        dest: 'dist/<%= pkg.name %>.min.js'
+      }
     }
   });
 
   // These plugins provide necessary tasks.
   grunt.loadNpmTasks('grunt-contrib-concat');
+  grunt.loadNpmTasks('grunt-contrib-uglify');
 
   // Default task.
-  grunt.registerTask('default', ['concat']);
+  grunt.registerTask('default', ['concat','uglify']);
 
 };
