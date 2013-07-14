@@ -4,7 +4,7 @@ var workerManager = function(settings){
 	settings=settings||{};
 	var thiz=this;
 	var functions = settings.functions||[];
-	var activeWork=[];
+	var activeCalls=[];
 	var workers=[];
 	var generateBlob = function(functions){
 		var num=functions.length;
@@ -26,16 +26,27 @@ var workerManager = function(settings){
 		return worker;
 	}
 	thiz.execute=function(name, params,callback){
+		//Generate a random identifier
 		var rand = Math.floor(Math.random()*100000000000);
-		var o={name:name,params:params,callbackHash:rand,timestamp:new Date()};
-		activeWork[rand] = {o:o,callback:callback};
-		workers[0].postMessage(JSON.stringify(o));
+		
+		//Define the "call" object
+		var call={
+			name:name,
+			params:params,
+			callbackHash:rand,
+			timestamp:new Date(),
+			callback:callback,
+		};
+		
+		//Save the call with the random identifier
+		activeCalls[rand] = call;
+		workers[0].postMessage(JSON.stringify(call));
 	}
 	var callbackWorker = function(worker,e){
-		var active = activeWork[e.callbackHash];
+		var call = activeCalls[e.callbackHash];
 		e.timestamp = new Date();
-		active.callback({result:e,call:active.o});
-		delete activeWork[e.callbackHash];
+		call.callback({result:e,call:call});
+		delete activeCalls[e.callbackHash];
 	}
 	var worker = addWorker();
 };
