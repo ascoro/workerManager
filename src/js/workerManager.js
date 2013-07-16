@@ -47,4 +47,17 @@ var workerManager = function(settings){
 		delete activeCalls[e.callbackHash];
 	}
 	var worker = addWorker();
+	
+	/**TODOS:
+		Multiple Workers
+		Select the number of workers
+		Detect cores and automatically create as many workers
+		Generate smart queues to store queued calls and asign when workers free.
+		Create queues inside workers so we can pre-assign to the most likely to be next worker but in case another worker finish first we can remove the call from the first worker
+		Statistics: % of running time per worker, most expensive functions
+		Posibility to add or remove functions from initialized workers
+		Use requirejs on worker to just evaluate the functions that we are about to use
+		Implement pull request from worker for unkown functions
+		....
+	***/
 };
