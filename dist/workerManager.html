@@ -4,17 +4,28 @@
 <script>
 var a= new workerManager({
 	functions:[
-		{name:'test',code:'result.success=true;result.message="test";'},
-		{name:'test2',code:'result.success=true;result.message="test2";'},
-		{name:'test3',code:'result.success=true;result.message="test3";'},
+		{name:'test',code:'for(var i=0;i<1000000;i++);result.success=true;result.message="test";'},
+		{name:'test2',code:'for(var i=0;i<1000000000;i++);result.success=true;result.message="test2";'},
+		{name:'test3',code:'for(var i=0;i<1000000;i++);result.success=true;result.message="test3";'},
 	]
 });
 
 var c = function(e){console.log(e);};
 
-setTimeout(function(){a.execute("test",{},c);},100);
-setTimeout(function(){a.execute("test1",{},c);},200);
-setTimeout(function(){a.execute("test2",{},c);},300);
-setTimeout(function(){a.execute("test3",{},c);},400);
-setTimeout(function(){a.execute("test4",{},c);},500);
+a.execute("test1",{},c);
+a.execute("test2",{},c);
+a.execute("test3",{},c);
+a.execute("test4",{},c);
+a.execute("test1",{},c);
+a.execute("test2",{},c);
+a.execute("test3",{},c);
+a.execute("test4",{},c);
+setTimeout(function(){a.execute("test1",{},c);
+a.execute("test2",{},c);
+a.execute("test3",{},c);
+a.execute("test4",{},c);
+a.execute("test1",{},c);
+a.execute("test2",{},c);
+a.execute("test3",{},c);
+a.execute("test4",{},c);},300)
 </script>

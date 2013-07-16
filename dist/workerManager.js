@@ -22,8 +22,22 @@ var workerManager = function(settings){
 		var worker = createWorker();
 		worker.addEventListener('message', function(e) { callbackWorker(this,JSON.parse(e.data)); }, false);
 		worker.count=workers.length;
+		worker.activeTasks=0;
 		workers.push(worker);
 		return worker;
+	}
+	var getFreeWorker = function(){
+		var minTasks=-1;
+		var minTasksId=0;
+		for(var i=0;workers[i];i++){
+			if(workers[i].activeTasks==0){
+				return workers[i];
+			}else if(workers[i].activeTasks<minTasks || minTasks<0){
+				minTasks=workers[i].activeTasks;
+				minTasksId=i;
+			}
+		}
+		return workers[minTasksId];
 	}
 	thiz.execute=function(name, params,callback){
 		//Generate a random identifier
@@ -37,21 +51,29 @@ var workerManager = function(settings){
 			timestamp:new Date(),
 			callback:callback,
 		};
-		
 		//Save the call with the random identifier
 		activeCalls[rand] = call;
-		workers[0].postMessage(JSON.stringify(call));
+		
+		//Search next less busy worker
+		var freeWorker=getFreeWorker();
+		freeWorker.activeTasks++;
+		console.log("Init call "+call.callbackHash+" to function "+call.name+" from worker num "+freeWorker.count);
+		freeWorker.postMessage(JSON.stringify(call));
 	}
 	var callbackWorker = function(worker,e){
+		worker.activeTasks--;
 		var call = activeCalls[e.callbackHash];
+		console.log("Return call "+call.callbackHash+" to function "+call.name+" from worker num "+worker.count);
 		e.timestamp = new Date();
 		call.callback({result:e,call:call});
 		delete activeCalls[e.callbackHash];
 	}
-	var worker = addWorker();
+	for(var i=0;i<4;i++){
+		addWorker();
+	}
 	
 	/**TODOS:
-		Multiple Workers
+		Multiple Workers - Done
 		Select the number of workers
 		Detect cores and automatically create as many workers
 		Generate smart queues to store queued calls and asign when workers free.
