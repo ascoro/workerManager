@@ -20,17 +20,22 @@ var workerManager = function(settings){
 		var worker = createWorker();
 		worker.addEventListener('message', function(e) { callbackWorker(this,JSON.parse(e.data)); }, false);
 		worker.count=workers.length;
-		worker.free=true;
+		worker.activeTasks=0;
 		workers.push(worker);
 		return worker;
 	}
 	var getFreeWorker = function(){
+		var minTasks=-1;
+		var minTasksId=0;
 		for(var i=0;workers[i];i++){
-			if(workers[i].free){
+			if(workers[i].activeTasks==0){
 				return workers[i];
+			}else if(workers[i].activeTasks<minTasks || minTasks<0){
+				minTasks=workers[i].activeTasks;
+				minTasksId=i;
 			}
 		}
-		return workers[0];
+		return workers[minTasksId];
 	}
 	thiz.execute=function(name, params,callback){
 		//Generate a random identifier
@@ -47,14 +52,14 @@ var workerManager = function(settings){
 		//Save the call with the random identifier
 		activeCalls[rand] = call;
 		
-		//Search next free worker
+		//Search next less busy worker
 		var freeWorker=getFreeWorker();
-		freeWorker.free=false;
+		freeWorker.activeTasks++;
 		console.log("Init call "+call.callbackHash+" to function "+call.name+" from worker num "+freeWorker.count);
 		freeWorker.postMessage(JSON.stringify(call));
 	}
 	var callbackWorker = function(worker,e){
-		worker.free=true;
+		worker.activeTasks--;
 		var call = activeCalls[e.callbackHash];
 		console.log("Return call "+call.callbackHash+" to function "+call.name+" from worker num "+worker.count);
 		e.timestamp = new Date();
