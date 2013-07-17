@@ -4,6 +4,7 @@ var workerManager = function(settings){
 	var functions = settings.functions||[];
 	var activeCalls=[];
 	var workers=[];
+	var numWorkers = settings.numWorkers||4;
 	var generateBlob = function(functions){
 		var num=functions.length;
 		var code="";
@@ -66,7 +67,7 @@ var workerManager = function(settings){
 		call.callback({result:e,call:call});
 		delete activeCalls[e.callbackHash];
 	}
-	for(var i=0;i<4;i++){
+	for(var i=0;i<numWorkers;i++){
 		addWorker();
 	}
 	

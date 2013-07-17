@@ -1,4 +1,4 @@
-/*! workerManager - v0.1.0 - 2013-07-16
+/*! workerManager - v0.1.0 - 2013-07-17
 * Copyright (c) 2013 Albert Serra; Licensed  */
 var workerManager = function(settings){
 	settings=settings||{};
@@ -6,6 +6,7 @@ var workerManager = function(settings){
 	var functions = settings.functions||[];
 	var activeCalls=[];
 	var workers=[];
+	var numWorkers = settings.numWorkers||4;
 	var generateBlob = function(functions){
 		var num=functions.length;
 		var code="";
@@ -68,7 +69,7 @@ var workerManager = function(settings){
 		call.callback({result:e,call:call});
 		delete activeCalls[e.callbackHash];
 	}
-	for(var i=0;i<4;i++){
+	for(var i=0;i<numWorkers;i++){
 		addWorker();
 	}
 	

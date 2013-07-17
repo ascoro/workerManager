@@ -7,7 +7,8 @@ var a= new workerManager({
 		{name:'test',code:'for(var i=0;i<1000000;i++);result.success=true;result.message="test";'},
 		{name:'test2',code:'for(var i=0;i<1000000000;i++);result.success=true;result.message="test2";'},
 		{name:'test3',code:'for(var i=0;i<1000000;i++);result.success=true;result.message="test3";'},
-	]
+	],
+	numWorkers:6,
 });
 
 var c = function(e){console.log(e);};
@@ -21,11 +22,12 @@ a.execute("test2",{},c);
 a.execute("test3",{},c);
 a.execute("test4",{},c);
 setTimeout(function(){a.execute("test1",{},c);
-a.execute("test2",{},c);
-a.execute("test3",{},c);
-a.execute("test4",{},c);
-a.execute("test1",{},c);
-a.execute("test2",{},c);
-a.execute("test3",{},c);
-a.execute("test4",{},c);},300)
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test1",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+},300)
 </script>
