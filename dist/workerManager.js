@@ -1,4 +1,4 @@
-/*! workerManager - v0.1.0 - 2013-07-17
+/*! workerManager - v0.1.0 - 2013-07-19
 * Copyright (c) 2013 Albert Serra; Licensed  */
 var workerManager = function(settings){
 	settings=settings||{};
@@ -25,6 +25,8 @@ var workerManager = function(settings){
 		worker.addEventListener('message', function(e) { callbackWorker(this,JSON.parse(e.data)); }, false);
 		worker.count=workers.length;
 		worker.activeTasks=0;
+		worker.timeSpend=0;
+		worker.totalTasks=0;
 		workers.push(worker);
 		return worker;
 	}
@@ -73,6 +75,7 @@ var workerManager = function(settings){
 		//Save the task with the random identifier
 		activeCalls[task.callbackHash] = task;
 		worker.activeTasks++;
+		worker.totalTasks++;
 		console.log("Init task "+task.callbackHash+" to function "+task.name+" from worker num "+worker.count);
 		worker.postMessage(JSON.stringify(task));
 	}
@@ -86,17 +89,31 @@ var workerManager = function(settings){
 			}
 		}
 	}
-	var callbackWorker = function(worker,e){
+	var callbackWorker = function(worker,result){
+		result.timestamp = new Date();
 		worker.activeTasks--;
 		unqueueTasks();
-		var call = activeCalls[e.callbackHash];
-		console.log("Return call "+call.callbackHash+" to function "+call.name+" from worker num "+worker.count);
-		e.timestamp = new Date();
-		call.callback({result:e,call:call});
-		delete activeCalls[e.callbackHash];
+		var task = activeCalls[result.callbackHash];
+		console.log("Return task "+task.callbackHash+" to function "+task.name+" from worker num "+worker.count);
+		updateWorkerStatistics(worker,task,result);
+		task.callback({result:result,task:task});
+		delete activeCalls[result.callbackHash];
+	}
+	var updateWorkerStatistics = function(worker,task,result){
+		var timeSpend = result.timestamp.getTime()-task.timestamp.getTime();
+		if(!worker.timeSpend){
+			worker.timeSpend=0;
+		}
+		worker.timeSpend +=timeSpend;
 	}
 	for(var i=0;i<numWorkers;i++){
 		addWorker();
+	}
+	thiz.printStatistics = function(){
+		for(var i=0;workers[i];i++){
+			var worker =workers[i];
+			console.log("Worker "+worker.count+" has processed "+worker.totalTasks+" tasks in "+worker.timeSpend+" milliseconds");
+		}
 	}
 	
 	/**TODOS:
