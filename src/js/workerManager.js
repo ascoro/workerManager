@@ -3,6 +3,7 @@ var workerManager = function(settings){
 	var thiz=this;
 	var functions = settings.functions||[];
 	var activeCalls=[];
+	var queuedCalls=[];
 	var workers=[];
 	var numWorkers = settings.numWorkers||4;
 	var generateBlob = function(functions){
@@ -36,6 +37,7 @@ var workerManager = function(settings){
 				minTasksId=i;
 			}
 		}
+		return;
 		return workers[minTasksId];
 	}
 	thiz.execute=function(name, params,callback){
@@ -50,17 +52,41 @@ var workerManager = function(settings){
 			timestamp:new Date(),
 			callback:callback,
 		};
-		//Save the call with the random identifier
-		activeCalls[rand] = call;
 		
+		//Assign new task to worker
+		assignNewTaskToFreeWorker(call);
+	}
+	var assignNewTaskToFreeWorker = function(task){
 		//Search next less busy worker
 		var freeWorker=getFreeWorker();
-		freeWorker.activeTasks++;
-		console.log("Init call "+call.callbackHash+" to function "+call.name+" from worker num "+freeWorker.count);
-		freeWorker.postMessage(JSON.stringify(call));
+		if(freeWorker){
+			assignTaskToWorker(freeWorker, task);
+			unqueueTasks();
+		}else{
+			//Save the call with the random identifier
+			queuedCalls.push(task);
+		}
+	}
+	var assignTaskToWorker = function(worker, task){
+		//Save the task with the random identifier
+		activeCalls[task.callbackHash] = task;
+		worker.activeTasks++;
+		console.log("Init task "+task.callbackHash+" to function "+task.name+" from worker num "+worker.count);
+		worker.postMessage(JSON.stringify(task));
+	}
+	var unqueueTasks = function(){
+		while(queuedCalls[0]){
+			var freeWorker=getFreeWorker();
+			if(freeWorker){
+				assignTaskToWorker(freeWorker, queuedCalls.pop());
+			}else{
+				break;
+			}
+		}
 	}
 	var callbackWorker = function(worker,e){
 		worker.activeTasks--;
+		unqueueTasks();
 		var call = activeCalls[e.callbackHash];
 		console.log("Return call "+call.callbackHash+" to function "+call.name+" from worker num "+worker.count);
 		e.timestamp = new Date();
@@ -73,7 +99,7 @@ var workerManager = function(settings){
 	
 	/**TODOS:
 		Multiple Workers - Done
-		Select the number of workers
+		Select the number of workers - Done
 		Detect cores and automatically create as many workers
 		Generate smart queues to store queued calls and asign when workers free.
 		Create queues inside workers so we can pre-assign to the most likely to be next worker but in case another worker finish first we can remove the call from the first worker
