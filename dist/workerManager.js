@@ -4,29 +4,13 @@ var workerManager = function(settings){
 	settings=settings||{};
 	var thiz=this;
 	var functions = settings.functions||[];
-	var activeCalls=[];
 	var queuedCalls=[];
 	var workers=[];
 	var numWorkers = settings.numWorkers||4;
-	var generateBlob = function(functions){
-		var num=functions.length;
-		var code="";
-		for(var i=0;i<num;i++){
-			var f =functions[i];
-			code+='case "'+f.name+'":'+f.code+';break;'
-		}
-		return URL.createObjectURL(new window.Blob(["self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);"]));
-	}
-	var createWorker = function(){
-		return new Worker(generateBlob(functions));
-	}
-	var addWorker = function(callback){
-		var worker = createWorker();
-		worker.addEventListener('message', function(e) { callbackWorker(this,JSON.parse(e.data)); }, false);
+	
+	var addWorker = function(){
+		var worker = new coroWorker({callback:unqueueTasks,functions:functions});
 		worker.count=workers.length;
-		worker.activeTasks=0;
-		worker.timeSpend=0;
-		worker.totalTasks=0;
 		workers.push(worker);
 		return worker;
 	}
@@ -34,15 +18,15 @@ var workerManager = function(settings){
 		var minTasks=-1;
 		var minTasksId=0;
 		for(var i=0;workers[i];i++){
-			if(workers[i].activeTasks==0){
+			var activeTasks=workers[i].activeTasks;
+			if(activeTasks==0){
 				return workers[i];
-			}else if(workers[i].activeTasks<minTasks || minTasks<0){
+			}else if(activeTasks<minTasks || minTasks<0){
 				minTasks=workers[i].activeTasks;
 				minTasksId=i;
 			}
 		}
 		return;
-		return workers[minTasksId];
 	}
 	thiz.execute=function(name, params,callback){
 		//Generate a random identifier
@@ -61,61 +45,91 @@ var workerManager = function(settings){
 		assignNewTaskToFreeWorker(call);
 	}
 	var assignNewTaskToFreeWorker = function(task){
+		console.log("About to assign ");
+		console.log(task);
 		//Search next less busy worker
 		var freeWorker=getFreeWorker();
 		if(freeWorker){
-			assignTaskToWorker(freeWorker, task);
+			freeWorker.executeTask(task);
+			console.log("Assigned");
 			unqueueTasks();
 		}else{
 			//Save the call with the random identifier
 			queuedCalls.push(task);
+			console.log("Queued");
 		}
-	}
-	var assignTaskToWorker = function(worker, task){
-		//Save the task with the random identifier
-		activeCalls[task.callbackHash] = task;
-		worker.activeTasks++;
-		worker.totalTasks++;
-		console.log("Init task "+task.callbackHash+" to function "+task.name+" from worker num "+worker.count);
-		worker.postMessage(JSON.stringify(task));
 	}
 	var unqueueTasks = function(){
 		while(queuedCalls[0]){
 			var freeWorker=getFreeWorker();
 			if(freeWorker){
-				assignTaskToWorker(freeWorker, queuedCalls.pop());
+				freeWorker.executeTask(queuedCalls.pop());
 			}else{
 				break;
 			}
 		}
 	}
-	var callbackWorker = function(worker,result){
-		result.timestamp = new Date();
-		worker.activeTasks--;
-		unqueueTasks();
-		var task = activeCalls[result.callbackHash];
-		console.log("Return task "+task.callbackHash+" to function "+task.name+" from worker num "+worker.count);
-		updateWorkerStatistics(worker,task,result);
-		task.callback({result:result,task:task});
-		delete activeCalls[result.callbackHash];
-	}
-	var updateWorkerStatistics = function(worker,task,result){
-		var timeSpend = result.timestamp.getTime()-task.timestamp.getTime();
-		if(!worker.timeSpend){
-			worker.timeSpend=0;
+	var init = function(){
+		for(var i=0;i<numWorkers;i++){
+			addWorker();
 		}
-		worker.timeSpend +=timeSpend;
-	}
-	for(var i=0;i<numWorkers;i++){
-		addWorker();
-	}
+	};
 	thiz.printStatistics = function(){
 		for(var i=0;workers[i];i++){
-			var worker =workers[i];
-			console.log("Worker "+worker.count+" has processed "+worker.totalTasks+" tasks in "+worker.timeSpend+" milliseconds");
+			console.log(workers[i].getStatistics());
 		}
 	}
 	
+	var coroWorker = function(settings){
+		var thiz=this;
+		var webWorker;
+		var functions = settings.functions;
+		var activeCalls=[];
+		thiz.activeTasks=0;
+		thiz.timeSpend=0;
+		thiz.totalTasks=0;
+		thiz.getStatistics = function(){
+			return "Worker "+thiz.count+" has processed "+thiz.totalTasks+" tasks in "+thiz.timeSpend+" milliseconds";
+		}
+		this.executeTask = function(task){		
+			//Save the task with the random identifier
+			activeCalls[task.callbackHash] = task;
+			thiz.activeTasks++;
+			thiz.totalTasks++;
+			console.log("Init task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
+			webWorker.postMessage(JSON.stringify(task));
+		}
+		var generateBlob = function(functions){
+			var num=functions.length;
+			var code="";
+			for(var i=0;i<num;i++){
+				var f =functions[i];
+				code+='case "'+f.name+'":'+f.code+';break;'
+			}
+			return URL.createObjectURL(new window.Blob(["self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);"]));
+		}
+		var updateStatistics = function(task,result){
+			var timeSpend = result.timestamp.getTime()-task.timestamp.getTime();
+			thiz.timeSpend +=timeSpend;
+		}
+		var callbackWorker = function(result){
+			result.timestamp = new Date();
+			var task = activeCalls[result.callbackHash];
+			delete activeCalls[result.callbackHash];
+			updateStatistics(task,result);
+			thiz.activeTasks--;
+			console.log("Return task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
+			setTimeout(settings.callback,0); //Notify that is finished
+			setTimeout(function(){task.callback({result:result,task:task});},0); //Call task callback
+		}
+		var init = function(){
+			webWorker = new Worker(generateBlob(functions));
+			webWorker.addEventListener('message', function(e) { callbackWorker(JSON.parse(e.data)); }, false);
+		}
+		
+		init();
+	}
+	init();
 	/**TODOS:
 		Multiple Workers - Done
 		Select the number of workers - Done
