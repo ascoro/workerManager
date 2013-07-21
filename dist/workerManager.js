@@ -1,10 +1,10 @@
-/*! workerManager - v0.1.0 - 2013-07-19
+/*! workerManager - v0.1.0 - 2013-07-20
 * Copyright (c) 2013 Albert Serra; Licensed  */
 var workerManager = function(settings){
 	settings=settings||{};
 	var thiz=this;
 	var functions = settings.functions||[];
-	var queuedCalls=[];
+	var queuedTaks=[];
 	var workers=[];
 	var numWorkers = settings.numWorkers||4;
 	
@@ -15,25 +15,18 @@ var workerManager = function(settings){
 		return worker;
 	}
 	var getFreeWorker = function(){
-		var minTasks=-1;
-		var minTasksId=0;
 		for(var i=0;workers[i];i++){
-			var activeTasks=workers[i].activeTasks;
-			if(activeTasks==0){
+			if(workers[i].activeTasks==0){
 				return workers[i];
-			}else if(activeTasks<minTasks || minTasks<0){
-				minTasks=workers[i].activeTasks;
-				minTasksId=i;
 			}
 		}
-		return;
 	}
 	thiz.execute=function(name, params,callback){
 		//Generate a random identifier
 		var rand = Math.floor(Math.random()*100000000000);
 		
-		//Define the "call" object
-		var call={
+		//Define the "task" object
+		var task={
 			name:name,
 			params:params,
 			callbackHash:rand,
@@ -42,28 +35,14 @@ var workerManager = function(settings){
 		};
 		
 		//Assign new task to worker
-		assignNewTaskToFreeWorker(call);
-	}
-	var assignNewTaskToFreeWorker = function(task){
-		console.log("About to assign ");
-		console.log(task);
-		//Search next less busy worker
-		var freeWorker=getFreeWorker();
-		if(freeWorker){
-			freeWorker.executeTask(task);
-			console.log("Assigned");
-			unqueueTasks();
-		}else{
-			//Save the call with the random identifier
-			queuedCalls.push(task);
-			console.log("Queued");
-		}
+		queuedTaks.push(task);
+		unqueueTasks();
 	}
 	var unqueueTasks = function(){
-		while(queuedCalls[0]){
+		while(queuedTaks[0]){
 			var freeWorker=getFreeWorker();
 			if(freeWorker){
-				freeWorker.executeTask(queuedCalls.pop());
+				freeWorker.executeTask(queuedTaks.pop());
 			}else{
 				break;
 			}
@@ -79,56 +58,6 @@ var workerManager = function(settings){
 			console.log(workers[i].getStatistics());
 		}
 	}
-	
-	var coroWorker = function(settings){
-		var thiz=this;
-		var webWorker;
-		var functions = settings.functions;
-		var activeCalls=[];
-		thiz.activeTasks=0;
-		thiz.timeSpend=0;
-		thiz.totalTasks=0;
-		thiz.getStatistics = function(){
-			return "Worker "+thiz.count+" has processed "+thiz.totalTasks+" tasks in "+thiz.timeSpend+" milliseconds";
-		}
-		this.executeTask = function(task){		
-			//Save the task with the random identifier
-			activeCalls[task.callbackHash] = task;
-			thiz.activeTasks++;
-			thiz.totalTasks++;
-			console.log("Init task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
-			webWorker.postMessage(JSON.stringify(task));
-		}
-		var generateBlob = function(functions){
-			var num=functions.length;
-			var code="";
-			for(var i=0;i<num;i++){
-				var f =functions[i];
-				code+='case "'+f.name+'":'+f.code+';break;'
-			}
-			return URL.createObjectURL(new window.Blob(["self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);"]));
-		}
-		var updateStatistics = function(task,result){
-			var timeSpend = result.timestamp.getTime()-task.timestamp.getTime();
-			thiz.timeSpend +=timeSpend;
-		}
-		var callbackWorker = function(result){
-			result.timestamp = new Date();
-			var task = activeCalls[result.callbackHash];
-			delete activeCalls[result.callbackHash];
-			updateStatistics(task,result);
-			thiz.activeTasks--;
-			console.log("Return task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
-			setTimeout(settings.callback,0); //Notify that is finished
-			setTimeout(function(){task.callback({result:result,task:task});},0); //Call task callback
-		}
-		var init = function(){
-			webWorker = new Worker(generateBlob(functions));
-			webWorker.addEventListener('message', function(e) { callbackWorker(JSON.parse(e.data)); }, false);
-		}
-		
-		init();
-	}
 	init();
 	/**TODOS:
 		Multiple Workers - Done
@@ -143,3 +72,96 @@ var workerManager = function(settings){
 		....
 	***/
 };
+
+var coroWorker = function(settings){
+	//Store the reference to itself to a "safe" variable to avoid breaking the scope.
+	var thiz=this;
+	var webWorker;
+	//Functions is an array of functions {name,code} which is going to send to the worker to be executed lately
+	var functions = settings.functions;
+	//List of current tasks
+	var tasks=[];
+	//Total number active tasks
+	thiz.activeTasks=0;
+	//Time in milliseconds spend on all the tasks assigned to this worker
+	thiz.timeSpend=0;
+	//Total number of tasks initiated
+	thiz.totalTasks=0;
+	
+	//Returns a string with the statistics of this worker
+	thiz.getStatistics = function(){
+		return "Worker "+thiz.count+" has processed "+thiz.totalTasks+" tasks in "+thiz.timeSpend+" milliseconds";
+	}
+	
+	//Executes the tasks in this worker
+	this.executeTask = function(task){		
+		//Update the statistics of worker
+		updateStatisticsPreTask(task);
+		//Send task to worker
+		webWorker.postMessage(JSON.stringify(task));
+	}
+	
+	//Converts the functions list to a Blob ready to be sent to the worker
+	var generateBlob = function(functions){
+		var num=functions.length;
+		var code="";
+		for(var i=0;i<num;i++){
+			var f =functions[i];
+			//Concatenate all the functions and codes in a switch/case structure
+			code+='case "'+f.name+'":'+f.code+';break;'
+		}
+		//Wrap the functions within a pre parse of the input and post parse of the result
+		return URL.createObjectURL(new window.Blob(["self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);"]));
+	}
+	
+	//Properties to be updated when the tasks finishes
+	var updateStatisticsPostTask = function(task,result){
+		//Calculate the milliseconds spent on the task
+		var timeSpend = result.timestamp.getTime()-task.timestamp.getTime();
+		//Add the time spent on the tasks to the total
+		thiz.timeSpend +=timeSpend;
+		//Reflect that the tasks has finished on the total number of active tasks
+		thiz.activeTasks--;
+		
+		//Output some text to have a visible confirmation
+		console.log("Return task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
+	}
+	
+	//Properties to be updated when a tasks is to be initiated
+	var updateStatisticsPreTask = function(task){
+		//Save the task with the random identifier
+		tasks[task.callbackHash] = task;
+		//Reflect that the action is active
+		thiz.activeTasks++;
+		//Reflect that we started another task in the worker
+		thiz.totalTasks++;
+		
+		//Output some text to have a visible confirmation
+		console.log("Init task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
+	}
+	
+	//Callback when the worker finishes a task
+	var callbackWorker = function(result){
+		//We calculate the timestamp where the worker has finished
+		result.timestamp = new Date();
+		//Retrieve the task using the callbackHash
+		var task = tasks[result.callbackHash];
+		//Update the statistics of the worker once the tasks has finished
+		updateStatisticsPostTask(task,result);
+		//Execute the global callback to notify the worker manager that a task has finished
+		setTimeout(settings.callback,0);
+		
+		//Execute the callback of the task to notify the initiator of the task that it has finished
+		setTimeout(function(){task.callback({result:result,task:task});},0);
+	}
+	//Initialize the coroWorker
+	var init = function(){
+		//Initialize the worker with all the specified functions
+		webWorker = new Worker(generateBlob(functions));
+		//Specify the callback when the worker finishes
+		webWorker.addEventListener('message', function(e) { callbackWorker(JSON.parse(e.data)); }, false);
+	}
+	
+	//Initialize the coroWorker
+	init();
+}

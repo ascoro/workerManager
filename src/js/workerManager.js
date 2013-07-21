@@ -20,7 +20,10 @@ var workerManager = function(settings){
 		}
 	}
 	thiz.execute=function(name, params,callback){
+		//Generate a random identifier
 		var rand = Math.floor(Math.random()*100000000000);
+		
+		//Define the "task" object
 		var task={
 			name:name,
 			params:params,
@@ -28,6 +31,8 @@ var workerManager = function(settings){
 			timestamp:new Date(),
 			callback:callback,
 		};
+		
+		//Assign new task to worker
 		queuedTaks.push(task);
 		unqueueTasks();
 	}
@@ -63,57 +68,101 @@ var workerManager = function(settings){
 		Use requirejs on worker to just evaluate the functions that we are about to use
 		Implement pull request from worker for unkown functions
 		....
+		FIX Blob error
+		Add requireJS support for workers
+		
 	***/
 };
 
 var coroWorker = function(settings){
+	//Store the reference to itself to a "safe" variable to avoid breaking the scope.
 	var thiz=this;
 	var webWorker;
+	//Functions is an array of functions {name,code} which is going to send to the worker to be executed lately
 	var functions = settings.functions;
-	var activeCalls=[];
+	//List of current tasks
+	var tasks=[];
+	//Total number active tasks
 	thiz.activeTasks=0;
+	//Time in milliseconds spend on all the tasks assigned to this worker
 	thiz.timeSpend=0;
+	//Total number of tasks initiated
 	thiz.totalTasks=0;
+	
+	//Returns a string with the statistics of this worker
 	thiz.getStatistics = function(){
 		return "Worker "+thiz.count+" has processed "+thiz.totalTasks+" tasks in "+thiz.timeSpend+" milliseconds";
 	}
+	
+	//Executes the tasks in this worker
 	this.executeTask = function(task){		
+		//Update the statistics of worker
 		updateStatisticsPreTask(task);
+		//Send task to worker
 		webWorker.postMessage(JSON.stringify(task));
 	}
+	
+	//Converts the functions list to a Blob ready to be sent to the worker
 	var generateBlob = function(functions){
 		var num=functions.length;
 		var code="";
 		for(var i=0;i<num;i++){
 			var f =functions[i];
+			//Concatenate all the functions and codes in a switch/case structure
 			code+='case "'+f.name+'":'+f.code+';break;'
 		}
+		//Wrap the functions within a pre parse of the input and post parse of the result
 		return URL.createObjectURL(new window.Blob(["self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);"]));
 	}
+	
+	//Properties to be updated when the tasks finishes
 	var updateStatisticsPostTask = function(task,result){
+		//Calculate the milliseconds spent on the task
 		var timeSpend = result.timestamp.getTime()-task.timestamp.getTime();
+		//Add the time spent on the tasks to the total
 		thiz.timeSpend +=timeSpend;
+		//Reflect that the tasks has finished on the total number of active tasks
+		thiz.activeTasks--;
+		
+		//Output some text to have a visible confirmation
+		console.log("Return task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
 	}
+	
+	//Properties to be updated when a tasks is to be initiated
 	var updateStatisticsPreTask = function(task){
-		activeCalls[task.callbackHash] = task;
+		//Save the task with the random identifier
+		tasks[task.callbackHash] = task;
+		//Reflect that the action is active
 		thiz.activeTasks++;
+		//Reflect that we started another task in the worker
 		thiz.totalTasks++;
+		
+		//Output some text to have a visible confirmation
 		console.log("Init task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
 	}
+	
+	//Callback when the worker finishes a task
 	var callbackWorker = function(result){
+		//We calculate the timestamp where the worker has finished
 		result.timestamp = new Date();
-		var task = activeCalls[result.callbackHash];
-		delete activeCalls[result.callbackHash];
+		//Retrieve the task using the callbackHash
+		var task = tasks[result.callbackHash];
+		//Update the statistics of the worker once the tasks has finished
 		updateStatisticsPostTask(task,result);
-		thiz.activeTasks--;
-		console.log("Return task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
+		//Execute the global callback to notify the worker manager that a task has finished
 		setTimeout(settings.callback,0);
+		
+		//Execute the callback of the task to notify the initiator of the task that it has finished
 		setTimeout(function(){task.callback({result:result,task:task});},0);
 	}
+	//Initialize the coroWorker
 	var init = function(){
+		//Initialize the worker with all the specified functions
 		webWorker = new Worker(generateBlob(functions));
+		//Specify the callback when the worker finishes
 		webWorker.addEventListener('message', function(e) { callbackWorker(JSON.parse(e.data)); }, false);
 	}
 	
+	//Initialize the coroWorker
 	init();
 }
