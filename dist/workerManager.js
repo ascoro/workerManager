@@ -1,4 +1,4 @@
-/*! workerManager - v0.1.0 - 2013-07-20
+/*! workerManager - v0.1.0 - 2013-07-21
 * Copyright (c) 2013 Albert Serra; Licensed  */
 var workerManager = function(settings){
 	settings=settings||{};
@@ -70,6 +70,9 @@ var workerManager = function(settings){
 		Use requirejs on worker to just evaluate the functions that we are about to use
 		Implement pull request from worker for unkown functions
 		....
+		FIX Blob error
+		Add requireJS support for workers
+		
 	***/
 };
 
@@ -111,7 +114,7 @@ var coroWorker = function(settings){
 			code+='case "'+f.name+'":'+f.code+';break;'
 		}
 		//Wrap the functions within a pre parse of the input and post parse of the result
-		return URL.createObjectURL(new window.Blob(["self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);"]));
+		return URL.createObjectURL(new window.Blob(["self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);"],{type:"text/javascript"}));
 	}
 	
 	//Properties to be updated when the tasks finishes

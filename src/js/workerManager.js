@@ -112,7 +112,9 @@ var coroWorker = function(settings){
 			code+='case "'+f.name+'":'+f.code+';break;'
 		}
 		//Wrap the functions within a pre parse of the input and post parse of the result
-		return URL.createObjectURL(new window.Blob(["self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);"]));
+		var finalCode = "self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);";
+		//Generate the Blob as a Javascript file-like object
+		return URL.createObjectURL(new window.Blob([finalCode],{type:"text/javascript"}));
 	}
 	
 	//Properties to be updated when the tasks finishes
