@@ -7,10 +7,11 @@ var a= new workerManager({
 		{name:'test2',code:'for(var i=0;i<1000000000;i++);result.success=true;result.message="test2";'},
 		{name:'test3',code:'for(var i=0;i<1000000;i++);result.success=true;result.message="test3";'},
 	],
-	numWorkers:6,
+	numWorkers:4,
 });
-
-var c = function(e){console.log(e);};
+var start = new Date().getTime();
+var count=0;
+var c = function(e){console.log(e);count++;console.log(new Date().getTime()-start+" -> "+count);};
 
 a.execute("test1",{},c);
 a.execute("test2",{},c);
@@ -21,6 +22,55 @@ a.execute("test2",{},c);
 a.execute("test3",{},c);
 a.execute("test4",{},c);
 setTimeout(function(){a.execute("test1",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test1",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test1",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test1",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test1",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test1",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test1",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
+	a.execute("test1",{},c);
+	a.execute("test2",{},c);
+	a.execute("test3",{},c);
+	a.execute("test4",{},c);
 	a.execute("test2",{},c);
 	a.execute("test3",{},c);
 	a.execute("test4",{},c);

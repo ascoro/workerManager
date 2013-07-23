@@ -4,11 +4,11 @@ var workerManager = function(settings){
 	var functions = settings.functions||[];
 	var queuedTaks=[];
 	var workers=[];
-	var numWorkers = settings.numWorkers||4;
+	var numWorkers = settings.numWorkers||0;
 	
-	var addWorker = function(){
-		var worker = new coroWorker({callback:unqueueTasks,functions:functions});
-		worker.count=workers.length;
+	var addWorker = function(simulateWorker){
+		var worker = new coroWorker({callback:unqueueTasks,functions:functions,simulateWorker:simulateWorker});
+		worker.id=workers.length;
 		workers.push(worker);
 		return worker;
 	}
@@ -50,6 +50,9 @@ var workerManager = function(settings){
 		for(var i=0;i<numWorkers;i++){
 			addWorker();
 		}
+		if(!workers[0]){
+			addWorker(true);
+		}
 	};
 	thiz.printStatistics = function(){
 		for(var i=0;workers[i];i++){
@@ -77,6 +80,7 @@ var workerManager = function(settings){
 var coroWorker = function(settings){
 	//Store the reference to itself to a "safe" variable to avoid breaking the scope.
 	var thiz=this;
+	var simulateWorker = settings.simulateWorker;
 	var webWorker;
 	//Functions is an array of functions {name,code} which is going to send to the worker to be executed lately
 	var functions = settings.functions;
@@ -91,19 +95,25 @@ var coroWorker = function(settings){
 	
 	//Returns a string with the statistics of this worker
 	thiz.getStatistics = function(){
-		return "Worker "+thiz.count+" has processed "+thiz.totalTasks+" tasks in "+thiz.timeSpend+" milliseconds";
+		return "Worker "+thiz.id+" has processed "+thiz.totalTasks+" tasks in "+thiz.timeSpend+" milliseconds";
 	}
 	
 	//Executes the tasks in this worker
 	this.executeTask = function(task){		
 		//Update the statistics of worker
 		updateStatisticsPreTask(task);
+		//Start task
+		startTask(task);
+	}
+	
+	//This functions is going to overide in case of a simulation
+	var startTask = function(task){
 		//Send task to worker
 		webWorker.postMessage(JSON.stringify(task));
 	}
 	
-	//Converts the functions list to a Blob ready to be sent to the worker
-	var generateBlob = function(functions){
+	//Contatenate the functions into a switch statement
+	var concatenateCodeIntoSwitchCases = function(functions){
 		var num=functions.length;
 		var code="";
 		for(var i=0;i<num;i++){
@@ -111,10 +121,29 @@ var coroWorker = function(settings){
 			//Concatenate all the functions and codes in a switch/case structure
 			code+='case "'+f.name+'":'+f.code+';break;'
 		}
+		code+="default:result={success:false,message:'Not implemented'};break;";
+		code = "var params = o.params; var result={success:true}; switch(o.name){"+code+"}; result.callbackHash=o.callbackHash; ";
+		return code;
+	}
+	
+	//Converts the functions list to a Blob ready to be sent to the worker
+	var generateBlob = function(functions){
+		var code = concatenateCodeIntoSwitchCases(functions);
+		var callback = "self.postMessage(JSON.stringify(result));";
 		//Wrap the functions within a pre parse of the input and post parse of the result
-		var finalCode = "self.addEventListener('message', function(e) { var o = JSON.parse(e.data);var params = o.params; var result={success:true}; switch(o.name){"+code+"default:result={success:false,message:'Not implemented'};break;}; result.callbackHash=o.callbackHash;self.postMessage(JSON.stringify(result)); }, false);";
+		var finalCode = "self.addEventListener('message',function(e){var o=JSON.parse(e.data);"+code+callback+"},false);";
 		//Generate the Blob as a Javascript file-like object
 		return URL.createObjectURL(new window.Blob([finalCode],{type:"text/javascript"}));
+	}
+	
+	//Converts the functions an evaluable string
+	var generateEvaluableString = function(functions){
+		var code = concatenateCodeIntoSwitchCases(functions);
+		var callback = "callbackWorker(result);";
+		//Wrap the functions within a pre parse of the input and post parse of the result
+		var finalCode = "startTask=function(o){"+code+callback+"}";
+		//Generate the Blob as a Javascript file-like object
+		return finalCode;
 	}
 	
 	//Properties to be updated when the tasks finishes
@@ -127,7 +156,7 @@ var coroWorker = function(settings){
 		thiz.activeTasks--;
 		
 		//Output some text to have a visible confirmation
-		console.log("Return task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
+		console.log("Return task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.id);
 	}
 	
 	//Properties to be updated when a tasks is to be initiated
@@ -140,7 +169,7 @@ var coroWorker = function(settings){
 		thiz.totalTasks++;
 		
 		//Output some text to have a visible confirmation
-		console.log("Init task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.count);
+		console.log("Init task "+task.callbackHash+" to function "+task.name+" from worker num "+thiz.id);
 	}
 	
 	//Callback when the worker finishes a task
@@ -155,14 +184,18 @@ var coroWorker = function(settings){
 		setTimeout(settings.callback,0);
 		
 		//Execute the callback of the task to notify the initiator of the task that it has finished
-		setTimeout(function(){task.callback({result:result,task:task});},0);
+		/*setTimeout(function(){*/task.callback({result:result,task:task});/*},0);*/
 	}
 	//Initialize the coroWorker
 	var init = function(){
-		//Initialize the worker with all the specified functions
-		webWorker = new Worker(generateBlob(functions));
-		//Specify the callback when the worker finishes
-		webWorker.addEventListener('message', function(e) { callbackWorker(JSON.parse(e.data)); }, false);
+		if(simulateWorker){
+			eval(generateEvaluableString(functions));
+		}else{
+			//Initialize the worker with all the specified functions
+			webWorker = new Worker(generateBlob(functions));
+			//Specify the callback when the worker finishes
+			webWorker.addEventListener('message', function(e) { callbackWorker(JSON.parse(e.data)); }, false);
+		}
 	}
 	
 	//Initialize the coroWorker
