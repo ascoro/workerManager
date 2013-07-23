@@ -1,4 +1,4 @@
-/*! workerManager - v0.1.0 - 2013-07-23
+/*! workerManager - v0.1.5 - 2013-07-23
 * Copyright (c) 2013 Albert Serra; Licensed  */
 var workerManager = function(settings){
 	settings=settings||{};

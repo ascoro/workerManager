@@ -1,7 +1,7 @@
 {
   "name": "workerManager",
   "author": { "name":"Albert Serra"},
-  "version": "0.1.0",
+  "version": "0.1.5",
   "devDependencies": {
     "grunt": "~0.4.1",
     "grunt-contrib-concat": "~0.3.0",
