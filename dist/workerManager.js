@@ -1,4 +1,4 @@
-/*! workerManager - v0.1.5 - 2013-07-23
+/*! workerManager - v0.1.5 - 2013-07-24
 * Copyright (c) 2013 Albert Serra; Licensed  */
 var workerManager = function(settings){
 	settings=settings||{};
@@ -21,7 +21,7 @@ var workerManager = function(settings){
 			}
 		}
 	}
-	thiz.execute=function(name, params,callback){
+	var prepareTask = function(name, params,callback){
 		//Generate a random identifier
 		var rand = Math.floor(Math.random()*100000000000);
 		
@@ -33,10 +33,20 @@ var workerManager = function(settings){
 			timestamp:new Date(),
 			callback:callback,
 		};
+		return task;
+	}
+	thiz.execute=function(name, params,callback){
+		var task = prepareTask(name, params,callback);
 		
 		//Assign new task to worker
 		queuedTaks.push(task);
 		unqueueTasks();
+	}
+	thiz.executeAll=function(name, params,callback){
+		for(var i=0;workers[i];i++){
+			var task = prepareTask(name, params,callback);
+			workers[i].executeTask(task);
+		}
 	}
 	var unqueueTasks = function(){
 		while(queuedTaks[0]){
